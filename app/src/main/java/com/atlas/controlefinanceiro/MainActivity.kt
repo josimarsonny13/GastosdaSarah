@@ -1,6 +1,10 @@
 package com.atlas.controlefinanceiro
 
 import android.os.Bundle
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
+import java.security.MessageDigest
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -33,7 +37,8 @@ data class FinanceState(
     var variable: Double = 1102.0,
     var reserve: Double = 300.0,
     var cardUsed: Double = 1850.0,
-    var cardLimit: Double = 3000.0
+    var cardLimit: Double = 3000.0,
+    var accountBalance: Double = 1326.40
 ) {
     val available get() = salary - fixed - variable
 }
@@ -52,15 +57,24 @@ class MainActivity : ComponentActivity() {
                     surface = Color.White,
                     error = Red
                 )
-            ) { FinanceApp() }
+            ) { FinanceApp(this) }
         }
     }
 }
 
+fun sha256(text: String): String = MessageDigest.getInstance("SHA-256")
+    .digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
+
 @Composable
-fun FinanceApp() {
+fun FinanceApp(context: Context) {
+    val prefs = remember { context.getSharedPreferences("gastos_sarah", Context.MODE_PRIVATE) }
+    var loggedIn by remember { mutableStateOf(prefs.getBoolean("logged_in", false)) }
+    if (!loggedIn) {
+        AuthScreen(context) { loggedIn = true }
+        return
+    }
     val nav = rememberNavController()
-    val state = remember { mutableStateOf(FinanceState()) }
+    val state = remember { mutableStateOf(FinanceState(accountBalance = prefs.getFloat("account_balance", 1326.40f).toDouble())) }
 
     Scaffold(
         bottomBar = { BottomBar(nav) },
@@ -72,9 +86,9 @@ fun FinanceApp() {
             modifier = Modifier.padding(pad)
         ) {
             composable("home") { HomeScreen(nav, state.value) }
-            composable("transactions") { TransactionsScreen() }
+            composable("transactions") { TransactionsScreen(context) }
             composable("cards") { CardsScreen(state.value) }
-            composable("profile") { ProfileScreen() }
+            composable("profile") { ProfileScreen(context) { loggedIn = false } }
             composable("buy") { CanIBuyScreen() }
             composable("expense") { NewExpenseScreen(state) }
             composable("budget") { BudgetScreen(state.value) }
@@ -245,13 +259,22 @@ fun NewExpenseScreen(state: MutableState<FinanceState>) {
 }
 
 @Composable
-fun TransactionsScreen() {
+fun TransactionsScreen(context: Context) {
     val tx = listOf(
         "Mercado" to -132.50, "Uber" to -28.90, "Salário" to 5000.0,
         "Alimentação" to -75.40, "Farmácia" to -42.90, "Streaming" to -29.90
     )
     LazyColumn(Modifier.fillMaxSize().padding(18.dp)) {
-        item { ScreenTitle("Transações") }
+        item {
+            ScreenTitle("Transações")
+            FinanceCard {
+                Text("Lançamentos automáticos", fontWeight = FontWeight.Bold)
+                Text("O app pode identificar Pix e transferências nas notificações autorizadas do Android.")
+                Button(onClick = { context.startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")) }, modifier = Modifier.padding(top = 10.dp)) {
+                    Text("Autorizar acesso às notificações")
+                }
+            }
+        }
         items(tx) { (n, v) ->
             FinanceCard {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -279,7 +302,7 @@ fun CardsScreen(s: FinanceState) {
             }
             FinanceCard {
                 Text("Conta bancária", fontWeight = FontWeight.Bold)
-                Text("Saldo: ${brl(1326.40)}")
+                Text("Saldo: ${brl(s.accountBalance)}")
             }
             TextButton(onClick = {}) { Text("Parcelas futuras") }
         }
@@ -350,7 +373,7 @@ fun AlertsScreen() {
 }
 
 @Composable
-fun ProfileScreen() {
+fun ProfileScreen(context: Context, onLogout: () -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(18.dp)) {
         item {
             ScreenTitle("Perfil")
@@ -361,7 +384,12 @@ fun ProfileScreen() {
                 Text("Notificações")
                 Text("Segurança")
                 Text("Backup e exportação")
+                Button(onClick = {
+                    context.getSharedPreferences("gastos_sarah", Context.MODE_PRIVATE).edit().putBoolean("logged_in", false).apply()
+                    onLogout()
+                }, modifier = Modifier.padding(top = 12.dp)) { Text("Sair") }
             }
         }
     }
 }
+\n\n@Composable\nfun AuthScreen(context: Context, onAuthenticated: () -> Unit) {\n    val prefs = remember { context.getSharedPreferences("gastos_sarah", Context.MODE_PRIVATE) }\n    var createMode by remember { mutableStateOf(!prefs.contains("user_email")) }\n    var email by remember { mutableStateOf("") }\n    var password by remember { mutableStateOf("") }\n    var confirm by remember { mutableStateOf("") }\n    var message by remember { mutableStateOf("") }\n\n    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {\n        Text("Gastos da Sarah", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Green)\n        Text(if (createMode) "Crie sua conta" else "Entre na sua conta", color = Color.Gray)\n        Spacer(Modifier.height(20.dp))\n        OutlinedTextField(email, { email = it.trim() }, label = { Text("E-mail") }, modifier = Modifier.fillMaxWidth())\n        OutlinedTextField(password, { password = it }, label = { Text("Senha") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))\n        if (createMode) OutlinedTextField(confirm, { confirm = it }, label = { Text("Confirmar senha") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))\n        if (message.isNotBlank()) Text(message, color = Red, modifier = Modifier.padding(top = 8.dp))\n        Button(onClick = {\n            if (email.isBlank() || password.length < 6) { message = "Informe um e-mail e uma senha com pelo menos 6 caracteres."; return@Button }\n            if (createMode) {\n                if (password != confirm) { message = "As senhas não coincidem."; return@Button }\n                prefs.edit().putString("user_email", email.lowercase()).putString("password_hash", sha256(password)).putBoolean("logged_in", true).apply()\n                onAuthenticated()\n            } else {\n                val ok = prefs.getString("user_email", "") == email.lowercase() && prefs.getString("password_hash", "") == sha256(password)\n                if (ok) { prefs.edit().putBoolean("logged_in", true).apply(); onAuthenticated() } else message = "E-mail ou senha incorretos."\n            }\n        }, modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) { Text(if (createMode) "Criar conta" else "Entrar") }\n        TextButton(onClick = { createMode = !createMode; message = "" }, modifier = Modifier.align(Alignment.CenterHorizontally)) {\n            Text(if (createMode) "Já tenho conta" else "Criar nova conta")\n        }\n        Text("A senha fica protegida localmente por hash neste protótipo.", fontSize = 11.sp, color = Color.Gray)\n    }\n}\n
