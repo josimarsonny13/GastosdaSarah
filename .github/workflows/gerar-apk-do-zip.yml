@@ -22,48 +22,58 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Descompactar projeto atualizado
+      - name: Instalar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Descompactar ZIP
+        shell: bash
         run: |
           rm -rf projeto_zip
           mkdir projeto_zip
           unzip -q GastosdaSarah.zip -d projeto_zip
+          echo "Conteudo do ZIP:"
+          find projeto_zip -maxdepth 3 -type f | head -100
 
       - name: Localizar projeto Android
         id: projeto
         shell: bash
         run: |
-          GRADLE=$(find projeto_zip -type f -name gradlew | head -1)
+          BUILD=$(find projeto_zip -type f \( -name "settings.gradle.kts" -o -name "settings.gradle" \) | head -1)
 
-          if [ -z "$GRADLE" ]; then
-            echo "ERRO: gradlew nao encontrado dentro do ZIP."
+          if [ -z "$BUILD" ]; then
+            echo "ERRO: settings.gradle ou settings.gradle.kts nao encontrado."
             exit 1
           fi
 
-          DIR=$(dirname "$GRADLE")
+          DIR=$(dirname "$BUILD")
           echo "dir=$DIR" >> "$GITHUB_OUTPUT"
-          echo "Projeto encontrado em: $DIR"
-
-      - name: Dar permissao ao Gradle
-        run: chmod +x "${{ steps.projeto.outputs.dir }}/gradlew"
+          echo "Projeto Android encontrado em: $DIR"
 
       - name: Gerar APK
-        working-directory: ${{ steps.projeto.outputs.dir }}
-        run: ./gradlew assembleDebug --stacktrace
-
-      - name: Preparar APK
         shell: bash
         run: |
-          APK=$(find "${{ steps.projeto.outputs.dir }}" -type f -name "*debug*.apk" | head -1)
+          cd "${{ steps.projeto.outputs.dir }}"
+          gradle assembleDebug --stacktrace
+
+      - name: Localizar APK
+        id: apk
+        shell: bash
+        run: |
+          APK=$(find "${{ steps.projeto.outputs.dir }}" -type f -path "*/outputs/apk/debug/*.apk" | head -1)
 
           if [ -z "$APK" ]; then
             echo "ERRO: APK nao encontrado."
             exit 1
           fi
 
-          cp "$APK" GastosdaSarah.apk
+          cp "$APK" "$GITHUB_WORKSPACE/GastosdaSarah.apk"
+          echo "APK criado com sucesso."
 
       - name: Disponibilizar APK
         uses: actions/upload-artifact@v4
         with:
           name: GastosdaSarah-APK
           path: GastosdaSarah.apk
+          if-no-files-found: error
