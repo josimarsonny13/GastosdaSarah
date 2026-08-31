@@ -392,4 +392,39 @@ fun ProfileScreen(context: Context, onLogout: () -> Unit) {
         }
     }
 }
-\n\n@Composable\nfun AuthScreen(context: Context, onAuthenticated: () -> Unit) {\n    val prefs = remember { context.getSharedPreferences("gastos_sarah", Context.MODE_PRIVATE) }\n    var createMode by remember { mutableStateOf(!prefs.contains("user_email")) }\n    var email by remember { mutableStateOf("") }\n    var password by remember { mutableStateOf("") }\n    var confirm by remember { mutableStateOf("") }\n    var message by remember { mutableStateOf("") }\n\n    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {\n        Text("Gastos da Sarah", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Green)\n        Text(if (createMode) "Crie sua conta" else "Entre na sua conta", color = Color.Gray)\n        Spacer(Modifier.height(20.dp))\n        OutlinedTextField(email, { email = it.trim() }, label = { Text("E-mail") }, modifier = Modifier.fillMaxWidth())\n        OutlinedTextField(password, { password = it }, label = { Text("Senha") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))\n        if (createMode) OutlinedTextField(confirm, { confirm = it }, label = { Text("Confirmar senha") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))\n        if (message.isNotBlank()) Text(message, color = Red, modifier = Modifier.padding(top = 8.dp))\n        Button(onClick = {\n            if (email.isBlank() || password.length < 6) { message = "Informe um e-mail e uma senha com pelo menos 6 caracteres."; return@Button }\n            if (createMode) {\n                if (password != confirm) { message = "As senhas não coincidem."; return@Button }\n                prefs.edit().putString("user_email", email.lowercase()).putString("password_hash", sha256(password)).putBoolean("logged_in", true).apply()\n                onAuthenticated()\n            } else {\n                val ok = prefs.getString("user_email", "") == email.lowercase() && prefs.getString("password_hash", "") == sha256(password)\n                if (ok) { prefs.edit().putBoolean("logged_in", true).apply(); onAuthenticated() } else message = "E-mail ou senha incorretos."\n            }\n        }, modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) { Text(if (createMode) "Criar conta" else "Entrar") }\n        TextButton(onClick = { createMode = !createMode; message = "" }, modifier = Modifier.align(Alignment.CenterHorizontally)) {\n            Text(if (createMode) "Já tenho conta" else "Criar nova conta")\n        }\n        Text("A senha fica protegida localmente por hash neste protótipo.", fontSize = 11.sp, color = Color.Gray)\n    }\n}\n
+
+
+@Composable
+fun AuthScreen(context: Context, onAuthenticated: () -> Unit) {
+    val prefs = remember { context.getSharedPreferences("gastos_sarah", Context.MODE_PRIVATE) }
+    var createMode by remember { mutableStateOf(!prefs.contains("user_email")) }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("") }
+
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
+        Text("Gastos da Sarah", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Green)
+        Text(if (createMode) "Crie sua conta" else "Entre na sua conta", color = Color.Gray)
+        Spacer(Modifier.height(20.dp))
+        OutlinedTextField(email, { email = it.trim() }, label = { Text("E-mail") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(password, { password = it }, label = { Text("Senha") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+        if (createMode) OutlinedTextField(confirm, { confirm = it }, label = { Text("Confirmar senha") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+        if (message.isNotBlank()) Text(message, color = Red, modifier = Modifier.padding(top = 8.dp))
+        Button(onClick = {
+            if (email.isBlank() || password.length < 6) { message = "Informe um e-mail e uma senha com pelo menos 6 caracteres."; return@Button }
+            if (createMode) {
+                if (password != confirm) { message = "As senhas não coincidem."; return@Button }
+                prefs.edit().putString("user_email", email.lowercase()).putString("password_hash", sha256(password)).putBoolean("logged_in", true).apply()
+                onAuthenticated()
+            } else {
+                val ok = prefs.getString("user_email", "") == email.lowercase() && prefs.getString("password_hash", "") == sha256(password)
+                if (ok) { prefs.edit().putBoolean("logged_in", true).apply(); onAuthenticated() } else message = "E-mail ou senha incorretos."
+            }
+        }, modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) { Text(if (createMode) "Criar conta" else "Entrar") }
+        TextButton(onClick = { createMode = !createMode; message = "" }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+            Text(if (createMode) "Já tenho conta" else "Criar nova conta")
+        }
+        Text("A senha fica protegida localmente por hash neste protótipo.", fontSize = 11.sp, color = Color.Gray)
+    }
+}
