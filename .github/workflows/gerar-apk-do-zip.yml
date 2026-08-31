@@ -1,0 +1,69 @@
+name: Gerar APK do ZIP
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "GastosdaSarah.zip"
+
+jobs:
+  gerar-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Descompactar projeto atualizado
+        run: |
+          rm -rf projeto_zip
+          mkdir projeto_zip
+          unzip -q GastosdaSarah.zip -d projeto_zip
+
+      - name: Localizar projeto Android
+        id: projeto
+        shell: bash
+        run: |
+          GRADLE=$(find projeto_zip -type f -name gradlew | head -1)
+
+          if [ -z "$GRADLE" ]; then
+            echo "ERRO: gradlew nao encontrado dentro do ZIP."
+            exit 1
+          fi
+
+          DIR=$(dirname "$GRADLE")
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+          echo "Projeto encontrado em: $DIR"
+
+      - name: Dar permissao ao Gradle
+        run: chmod +x "${{ steps.projeto.outputs.dir }}/gradlew"
+
+      - name: Gerar APK
+        working-directory: ${{ steps.projeto.outputs.dir }}
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Preparar APK
+        shell: bash
+        run: |
+          APK=$(find "${{ steps.projeto.outputs.dir }}" -type f -name "*debug*.apk" | head -1)
+
+          if [ -z "$APK" ]; then
+            echo "ERRO: APK nao encontrado."
+            exit 1
+          fi
+
+          cp "$APK" GastosdaSarah.apk
+
+      - name: Disponibilizar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GastosdaSarah-APK
+          path: GastosdaSarah.apk
